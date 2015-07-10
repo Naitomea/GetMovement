@@ -6,27 +6,31 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorManager;
 import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
+import java.util.Iterator;
 import java.util.Vector;
 
 
 public class MainActivity extends ActionBarActivity implements SensorEventListener {
+    String TAG = "MainActivity";
 
     TextView valuesAccelView, valuesLinearAccelView;
     TextView nanoTimeElapsedView;
-    TextView metersView, speedView;
+    TextView metersView, speedView, gravityView;
 
     Button calibrateButton;
-    Vector calibrateData;
-    long lastCalibrage = 0;
+    Vector calibrateData = new Vector();
+    double offsetCalibrage = 0.f;
+    long lastCalibrageNanoTime = 0;
 
     SensorManager sensorMgr;
-    Sensor accelerometer, linearAccelerometer;
+    Sensor accelerometer, linearAccelerometer, gravity;
 
     float meters = 0, speed = 0;
     long lastNanoTime = 0, newNanoTime = 0, nanoTimeElapsed = 0;
@@ -41,27 +45,30 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
         nanoTimeElapsedView = (TextView) findViewById(R.id.nanoTimeElapsed);
         metersView = (TextView) findViewById(R.id.meters);
         speedView = (TextView) findViewById(R.id.speed);
+        gravityView = (TextView) findViewById(R.id.gravity);
 
         calibrateButton = (Button) findViewById(R.id.calibrateButton);
         calibrateButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                lastCalibrage = System.nanoTime();
+                lastCalibrageNanoTime = System.nanoTime();
             }
         });
 
         sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
+        gravity = sensorMgr.getDefaultSensor(Sensor.TYPE_GRAVITY);
         accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
         linearAccelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
     }
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER){
-            valuesAccelView.setText("z = " + String.valueOf(event.values[2]));
-        }else if(event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION){
-            if (lastCalibrage == 0) {
-                valuesLinearAccelView.setText("z = " + String.valueOf(event.values[2]));
+        if (event.sensor.getType() == Sensor.TYPE_GRAVITY) {
+            gravityView.setText("Gravity = " + String.valueOf(event.values[2]) + " m/s�");
+        }
+        else if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER){
+            if (lastCalibrageNanoTime == 0) {
+                valuesAccelView.setText("z = " + String.valueOf(event.values[2]));
 
                 newNanoTime = System.nanoTime();
                 nanoTimeElapsed = newNanoTime - lastNanoTime;
@@ -70,7 +77,7 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
                 nanoTimeElapsedView.setText("NanoTime Elapsed = " + String.valueOf(nanoTimeElapsed));
 
                 /***************************/
-                speed += (event.values[2] + 0.647);
+                speed += ((event.values[2] - 9.80665) - offsetCalibrage);
                 speedView.setText("Speed = " + String.valueOf(speed) + " m/s");
                 /***************************/
 
@@ -78,11 +85,24 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
                 metersView.setText("Meters = " + String.valueOf(meters));
             }
             else {
-                if((System.nanoTime() - lastCalibrage) < 2000000000){
+                if ((System.nanoTime() - lastCalibrageNanoTime) < 2000000000) {
+                    calibrateData.add(event.values[2] - 9.80665);
+                } else {
+                    lastCalibrageNanoTime = 0;
 
-                }else
-                    lastCalibrage = 0;
+                    Iterator i = calibrateData.iterator();
+                    while (i.hasNext())
+                        offsetCalibrage += (double) i.next();
+                    if (calibrateData.size() != 0) offsetCalibrage /= (double) calibrateData.size();
+
+                    Log.i(TAG, String.valueOf(offsetCalibrage));
+                }
             }
+
+            
+            gravityView.setText("Gravity = 9.80665 m/s²");
+        }else if(event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION){
+
         }
     }
 
@@ -94,16 +114,20 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
     @Override
     protected void onPause() {
         sensorMgr.unregisterListener(this, accelerometer);
-        //sensorManager.unregisterListener(this, gravity);
-        sensorMgr.unregisterListener(this, linearAccelerometer);
+        if (gravity != null)
+            sensorMgr.unregisterListener(this, gravity);
+        if (linearAccelerometer != null)
+            sensorMgr.unregisterListener(this, linearAccelerometer);
         super.onPause();
     }
     /* * (non-Javadoc) *  * @see android.app.Activity#onResume() */
     @Override
     protected void onResume() {
         sensorMgr.registerListener(this, accelerometer, SensorManager.SENSOR_DELAY_GAME);
-        //sensorManager.registerListener(this, gravity, SensorManager.SENSOR_DELAY_UI);
-        sensorMgr.registerListener(this, linearAccelerometer, SensorManager.SENSOR_DELAY_GAME);
+        if (gravity != null)
+            sensorMgr.registerListener(this, gravity, SensorManager.SENSOR_DELAY_GAME);
+        if (linearAccelerometer != null)
+            sensorMgr.registerListener(this, linearAccelerometer, SensorManager.SENSOR_DELAY_GAME);
         super.onResume();
     }
 
