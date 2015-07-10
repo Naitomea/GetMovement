@@ -8,6 +8,8 @@ import android.support.v7.app.ActionBarActivity;
 import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.Button;
 import android.widget.TextView;
 
 import java.util.Vector;
@@ -17,12 +19,16 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
 
     TextView valuesAccelView, valuesLinearAccelView;
     TextView nanoTimeElapsedView;
-    TextView metersView;
+    TextView metersView, speedView;
+
+    Button calibrateButton;
+    Vector calibrateData;
+    long lastCalibrage = 0;
 
     SensorManager sensorMgr;
     Sensor accelerometer, linearAccelerometer;
 
-    float meters = 0;
+    float meters = 0, speed = 0;
     long lastNanoTime = 0, newNanoTime = 0, nanoTimeElapsed = 0;
 
     @Override
@@ -34,6 +40,15 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
         valuesLinearAccelView = (TextView) findViewById(R.id.valuesLinearAccel);
         nanoTimeElapsedView = (TextView) findViewById(R.id.nanoTimeElapsed);
         metersView = (TextView) findViewById(R.id.meters);
+        speedView = (TextView) findViewById(R.id.speed);
+
+        calibrateButton = (Button) findViewById(R.id.calibrateButton);
+        calibrateButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                lastCalibrage = System.nanoTime();
+            }
+        });
 
         sensorMgr = (SensorManager) getSystemService(SENSOR_SERVICE);
         accelerometer = sensorMgr.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
@@ -45,16 +60,29 @@ public class MainActivity extends ActionBarActivity implements SensorEventListen
         if(event.sensor.getType() == Sensor.TYPE_ACCELEROMETER){
             valuesAccelView.setText("z = " + String.valueOf(event.values[2]));
         }else if(event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION){
-            valuesLinearAccelView.setText("z = " + String.valueOf(event.values[2]));
+            if (lastCalibrage == 0) {
+                valuesLinearAccelView.setText("z = " + String.valueOf(event.values[2]));
 
-            newNanoTime = System.nanoTime();
-            nanoTimeElapsed = newNanoTime - lastNanoTime;
-            lastNanoTime = newNanoTime;
+                newNanoTime = System.nanoTime();
+                nanoTimeElapsed = newNanoTime - lastNanoTime;
+                lastNanoTime = newNanoTime;
 
-            nanoTimeElapsedView.setText("NanoTime Elapsed = " + String.valueOf(nanoTimeElapsed));
+                nanoTimeElapsedView.setText("NanoTime Elapsed = " + String.valueOf(nanoTimeElapsed));
 
-            meters += event.values[2] * (nanoTimeElapsed/1000000000);
-            metersView.setText("Meters = " + String.valueOf(meters));
+                /***************************/
+                speed += (event.values[2] + 0.647);
+                speedView.setText("Speed = " + String.valueOf(speed) + " m/s");
+                /***************************/
+
+                meters += event.values[2] * (nanoTimeElapsed / 1000000000);
+                metersView.setText("Meters = " + String.valueOf(meters));
+            }
+            else {
+                if((System.nanoTime() - lastCalibrage) < 2000000000){
+
+                }else
+                    lastCalibrage = 0;
+            }
         }
     }
 
